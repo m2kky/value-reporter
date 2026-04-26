@@ -1,0 +1,88 @@
+{
+  "clients": [
+    {
+      "id": "client_demo",
+      "name": "Client Demo",
+      "output_folder": "Horeca Smart",
+      "timezone": "Africa/Cairo",
+      "currency": "EGP",
+      "platforms": {
+        "meta": {
+          "enabled": true,
+          "access_token_env": "META_ADS_ACCESS_TOKEN",
+          "api_version_env": "META_API_VERSION",
+          "accounts": [
+            {
+              "id": "horeca_smart",
+              "name": "Horeca-Smart ",
+              "ad_account_id": "act_7271367139613426"
+            }
+          ],
+          "levels": [
+            "campaign"
+          ],
+          "fields": [
+            "account_id",
+            "account_name",
+            "campaign_id",
+            "campaign_name",
+            "objective",
+            "date_start",
+            "date_stop",
+            "spend",
+            "impressions",
+            "reach",
+            "frequency",
+            "clicks",
+            "inline_link_clicks",
+            "ctr",
+            "cpc",
+            "cpm",
+            "cpp",
+            "actions",
+            "action_values"
+          ],
+          "access_token": "EAAP9joBN7vIBRUMuVEW3IiQpOx0kXVMnRXJNHFLw7lXmQtunOchh5SiTgh3gjAq4dZAgZCS5vY4Ny3CZAzsEHlBhpZA0susUZB0ClvJQHRvBYZAseaCXY7dyVakEtHyogLENbPTmx58fiP34UqDt3VqXzqgqs6WZBCFNiyMAEOMeyWb6TD4x91jZCLQHtnJE"
+        },
+        "organic": {
+          "enabled": true,
+          "page_id_env": "META_PAGE_ID",
+          "access_token_env": "META_ORGANIC_ACCESS_TOKEN",
+          "fallback_access_token_envs": [
+            "META_PAGE_ACCESS_TOKEN",
+            "META_ACCESS_TOKEN",
+            "META_ADS_ACCESS_TOKEN"
+          ],
+          "instagram_account_id_env": "META_INSTAGRAM_ACCOUNT_ID",
+          "instagram_access_token_env": "META_IG_ACCESS_TOKEN",
+          "instagram_fallback_access_token_envs": [
+            "META_ADS_ACCESS_TOKEN",
+            "META_ORGANIC_ACCESS_TOKEN",
+            "META_ACCESS_TOKEN"
+          ],
+          "facebook_enabled": true,
+          "instagram_enabled": true,
+          "max_facebook_posts": 100,
+          "max_instagram_media": 100,
+          "page_id": "227436090452800",
+          "instagram_account_id": "17841459521133510",
+          "facebook_post_insight_metrics": [
+            "post_impressions_unique",
+            "post_clicks"
+          ],
+          "instagram_media_insight_metrics": [
+            "views",
+            "reach",
+            "likes",
+            "comments",
+            "shares",
+            "saved",
+            "total_interactions"
+          ],
+          "access_token": "EAAP9joBN7vIBRUMuVEW3IiQpOx0kXVMnRXJNHFLw7lXmQtunOchh5SiTgh3gjAq4dZAgZCS5vY4Ny3CZAzsEHlBhpZA0susUZB0ClvJQHRvBYZAseaCXY7dyVakEtHyogLENbPTmx58fiP34UqDt3VqXzqgqs6WZBCFNiyMAEOMeyWb6TD4x91jZCLQHtnJE"
+        }
+      },
+      "ai_token": ""
+    }
+  ]
+}
