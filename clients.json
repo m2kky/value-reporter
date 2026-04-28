@@ -3,7 +3,7 @@
     {
       "id": "client_demo",
       "name": "Client Demo",
-      "output_folder": "Horeca Smart",
+      "output_folder": "NASA International Schools",
       "timezone": "Africa/Cairo",
       "currency": "EGP",
       "platforms": {
@@ -13,9 +13,9 @@
           "api_version_env": "META_API_VERSION",
           "accounts": [
             {
-              "id": "horeca_smart",
-              "name": "Horeca-Smart ",
-              "ad_account_id": "act_7271367139613426"
+              "id": "nasa_intrnational_schools",
+              "name": "Nasa Intrnational Schools",
+              "ad_account_id": "act_9940385789409245"
             }
           ],
           "levels": [
@@ -42,7 +42,7 @@
             "actions",
             "action_values"
           ],
-          "access_token": "EAAP9joBN7vIBRUMuVEW3IiQpOx0kXVMnRXJNHFLw7lXmQtunOchh5SiTgh3gjAq4dZAgZCS5vY4Ny3CZAzsEHlBhpZA0susUZB0ClvJQHRvBYZAseaCXY7dyVakEtHyogLENbPTmx58fiP34UqDt3VqXzqgqs6WZBCFNiyMAEOMeyWb6TD4x91jZCLQHtnJE"
+          "access_token": "EAAP9joBN7vIBRcxrttWHfoHKoj1rrQGZBmhMADTZB4av4mjKMtZAnYAR6vbped5GJQHcgX7pWnZA7iOJuCB0jLuFmvtwzL1x1DqSnKu3K15xviw1ZBJFEdoddh4Kn8wDKF8AbmzksowhYi82IeduFcEPzc667v1tpvWpjAT9zn3IJq1YD6MsvZCXq6PmZBh"
         },
         "organic": {
           "enabled": true,
@@ -64,11 +64,14 @@
           "instagram_enabled": true,
           "max_facebook_posts": 100,
           "max_instagram_media": 100,
-          "page_id": "227436090452800",
-          "instagram_account_id": "17841459521133510",
+          "page_id": "359509670571259",
+          "instagram_account_id": "17841467435383212",
           "facebook_post_insight_metrics": [
             "post_impressions_unique",
-            "post_clicks"
+            "post_clicks",
+            "post_engaged_users",
+            "post_negative_feedback",
+            "post_video_views_organic"
           ],
           "instagram_media_insight_metrics": [
             "views",
@@ -79,7 +82,7 @@
             "saved",
             "total_interactions"
           ],
-          "access_token": "EAAP9joBN7vIBRUMuVEW3IiQpOx0kXVMnRXJNHFLw7lXmQtunOchh5SiTgh3gjAq4dZAgZCS5vY4Ny3CZAzsEHlBhpZA0susUZB0ClvJQHRvBYZAseaCXY7dyVakEtHyogLENbPTmx58fiP34UqDt3VqXzqgqs6WZBCFNiyMAEOMeyWb6TD4x91jZCLQHtnJE"
+          "access_token": "EAAP9joBN7vIBRcxrttWHfoHKoj1rrQGZBmhMADTZB4av4mjKMtZAnYAR6vbped5GJQHcgX7pWnZA7iOJuCB0jLuFmvtwzL1x1DqSnKu3K15xviw1ZBJFEdoddh4Kn8wDKF8AbmzksowhYi82IeduFcEPzc667v1tpvWpjAT9zn3IJq1YD6MsvZCXq6PmZBh"
         }
       },
       "ai_token": ""

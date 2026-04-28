@@ -92,6 +92,7 @@ def build_ai_context(
     organic_previous_summary: dict[str, Any] | None = None,
     organic_previous_rows: list[dict[str, Any]] | None = None,
     conversations: dict[str, Any] | None = None,
+    leads: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     organic_current_totals = _summary_totals(organic_summary)
     organic_previous_totals = _summary_totals(organic_previous_summary)
@@ -117,6 +118,7 @@ def build_ai_context(
             "previous_content_count": len(organic_previous_rows or []),
         },
         "conversations": conversations or {},
+        "leads": leads or {},
         "methodology": {
             "ctr": "clicks / impressions * 100",
             "cpc": "spend / clicks",
@@ -428,86 +430,144 @@ async def generate_with_openai(prompt_text: str, data_context: dict[str, Any], s
     return text
 
 
-async def map_reduce_ai_pipeline(context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    # Step 1: Map (Chunked Summarization)
-    system_base = "You are a senior performance marketing strategist analyzing data for an Egyptian agency. Reply in professional Arabic. Be concise, actionable, and data-driven."
-    
-    ads_task = generate_with_openai(
-        "Analyze the paid ads performance, top campaigns, and month-over-month changes. Extract key insights and anomalies.",
-        context["paid"],
-        system_base
-    )
-    
-    organic_task = generate_with_openai(
-        "Analyze the organic content performance, top posts, themes, and formats. Extract content strategy learnings.",
-        context["organic"],
-        system_base
-    )
-    
-    ads_insights, organic_insights = await asyncio.gather(ads_task, organic_task)
-    
-    # Step 2: Reduce (Executive Synthesis)
-    synthesis_context = {
-        "ads_insights": ads_insights,
-        "organic_insights": organic_insights,
-        "conversations": context.get("conversations", {}),
-        "period": context["period"],
-        "client": context["client"]
+def _build_system_prompt(language: str) -> str:
+    if language == "en":
+        return "You are a senior performance marketing strategist. Reply in professional English. Be concise, actionable, and data-driven. Use Markdown formatting."
+    return "You are a senior performance marketing strategist analyzing data for an Egyptian agency. Reply in professional Arabic. Be concise, actionable, and data-driven. Use Markdown formatting."
+
+
+def _build_template_prompt(template: str, language: str, kpi_targets: list[dict] | None, custom_prompt: str) -> str:
+    lang_note = "Reply in English." if language == "en" else "Reply in Arabic."
+
+    if template == "content":
+        return f"""Analyze the organic content performance data in depth. {lang_note}
+Focus on:
+- Top performing content formats (VIDEO, IMAGE, CAROUSEL, REEL)
+- Best content themes/topics and what made them work
+- Engagement rate analysis and what drives it
+- Recommendations for next month's content calendar
+Use Markdown headings and tables."""
+
+    if template == "conversations":
+        return f"""Analyze the messaging and conversations data. {lang_note}
+Focus on:
+- Total conversation volume and trends
+- Response rate and average response time
+- Quality of customer service based on the numbers
+- Recommendations to improve response times and rates
+Use Markdown headings and tables."""
+
+    if template == "kpi" and kpi_targets:
+        targets_text = "\n".join(
+            f"- {t.get('label', t.get('metric', ''))}: Target = {t.get('target', 'N/A')}"
+            for t in kpi_targets
+        )
+        return f"""Compare the actual performance data against the following KPI targets. {lang_note}
+        
+KPI Targets set by the user:
+{targets_text}
+
+For each KPI:
+1. Show the target vs actual value
+2. Calculate achievement percentage
+3. Analyze why targets were met or missed
+4. Provide recommendations to improve underperforming KPIs
+
+Use a Markdown table for the comparison and add analysis sections after."""
+
+    if template == "custom" and custom_prompt:
+        return f"""{custom_prompt}
+
+{lang_note}
+Use Markdown formatting with headings, tables, and bullet points."""
+
+    # Default: full analysis
+    if language == "en":
+        return """Write a comprehensive Monthly Performance Report covering:
+# Monthly Performance Summary
+## Key Highlights (top 3-4 KPIs)
+## Paid Ads & Lead Generation (what worked, what didn't, leads/CPL analysis)
+## Organic Content Deep Dive (top themes, formats, and summarize the top comments/sentiment)
+## Content Attribution (analyze which content formats drove the most messages or leads)
+## Inbox & Customer Service (analyze conversation volumes, extract FAQs from transcripts, and evaluate moderator response quality)
+## Action Plan & Recommendations (3-5 concrete next steps)
+Use Markdown tables for data comparisons."""
+    else:
+        return """Write a comprehensive, extremely detailed Executive Summary in Arabic.
+Use this exact Markdown structure:
+# ملخص الأداء الشهري
+## أبرز الأرقام
+(Highlight the top 3-4 KPIs overall)
+## تحليل الحملات المدفوعة وإعلانات الـ Leads
+(Summarize what worked and what didn't in paid ads, analyze lead forms, and cost per lead)
+## تحليل المحتوى المجاني والتعليقات
+(Summarize the top performing organic themes and formats. Read the 'top_comments' provided in the data and summarize the sentiment and what users are saying)
+## تأثير المحتوى على المبيعات (Content Attribution)
+(Analyze which content formats or topics likely drove the most messages, bookings, or leads)
+## جودة خدمة العملاء والرسائل
+(Analyze conversation volumes. Read the 'transcripts' of conversations from Facebook, Instagram, and WhatsApp. Extract the Frequently Asked Questions (FAQs). Evaluate the quality of the moderator's responses)
+## خطة العمل والتوصيات
+(Provide 3-5 concrete, actionable steps for next month)"""
+
+
+async def template_ai_pipeline(context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    ai_options = context.get("ai_options", {})
+    template = ai_options.get("template", "full")
+    language = ai_options.get("language", "ar")
+    kpi_targets = context.get("kpi_targets")
+    custom_prompt = ai_options.get("custom_prompt", "")
+
+    system_prompt = _build_system_prompt(language)
+    user_prompt = _build_template_prompt(template, language, kpi_targets, custom_prompt)
+
+    # Build focused data context based on template
+    data_for_ai = {
+        "client": context.get("client", {}),
+        "period": context.get("period", {}),
     }
-    
-    executive_prompt = """
-    Based on the ads, organic insights, and messaging conversations data, write a highly professional, structured Executive Summary in Arabic.
-    Use this exact Markdown structure:
-    # ملخص الأداء الشهري
-    ## أبرز الأرقام
-    (Highlight the top 3-4 KPIs overall)
-    ## تحليل الحملات المدفوعة
-    (Summarize what worked and what didn't in paid ads)
-    ## تحليل المحتوى المجاني (Organic)
-    (Summarize the top performing organic themes and formats)
-    ## جودة خدمة العملاء (المحادثات والردود)
-    (Analyze the messaging volume and response times)
-    ## خطة العمل والتوصيات
-    (Provide 3-5 concrete, actionable steps for next month)
-    """
-    
-    executive_synthesis = await generate_with_openai(
-        executive_prompt,
-        synthesis_context,
-        system_base
-    )
-    
-    # Step 3: Presentation Structuring (JSON)
-    json_prompt = """
-    Take the Executive Synthesis and structure it into a strict JSON array of slides. 
-    Format:
-    {
-      "slides": [
-        { "type": "title", "title": "Monthly Performance", "subtitle": "..." },
-        { "type": "summary", "title": "Executive Summary", "bullets": ["...", "..."] },
-        { "type": "data", "title": "Paid Ads", "insights": ["..."] },
-        { "type": "data", "title": "Organic Content", "insights": ["..."] },
-        { "type": "action", "title": "Next Steps", "bullets": ["..."] }
-      ]
-    }
-    Return ONLY valid JSON.
-    """
-    
-    slides_json_str = await generate_with_openai(json_prompt, {"synthesis": executive_synthesis}, system_base)
-    
-    # Clean JSON markdown blocks if present
-    slides_json_str = slides_json_str.strip()
-    if slides_json_str.startswith("```json"):
-        slides_json_str = slides_json_str[7:]
-    if slides_json_str.endswith("```"):
-        slides_json_str = slides_json_str[:-3]
-    
+
+    if template in ("full", "kpi", "custom"):
+        data_for_ai["paid"] = context.get("paid", {})
+        data_for_ai["organic"] = context.get("organic", {})
+        data_for_ai["conversations"] = context.get("conversations", {})
+    elif template == "content":
+        data_for_ai["organic"] = context.get("organic", {})
+    elif template == "conversations":
+        data_for_ai["conversations"] = context.get("conversations", {})
+
+    if kpi_targets:
+        data_for_ai["kpi_targets"] = kpi_targets
+
+    report_text = await generate_with_openai(user_prompt, data_for_ai, system_prompt)
+
+    # Generate slides JSON
+    lang_note = "in English" if language == "en" else "in Arabic"
+    json_prompt = f"""Take the following report and structure it into a strict JSON array of slides {lang_note}.
+Format:
+{{
+  "slides": [
+    {{ "type": "title", "title": "...", "subtitle": "..." }},
+    {{ "type": "summary", "title": "...", "bullets": ["...", "..."] }},
+    {{ "type": "data", "title": "...", "insights": ["..."] }},
+    {{ "type": "action", "title": "...", "bullets": ["..."] }}
+  ]
+}}
+Return ONLY valid JSON."""
+
     try:
+        slides_json_str = await generate_with_openai(json_prompt, {"report": report_text}, system_prompt)
+        slides_json_str = slides_json_str.strip()
+        if slides_json_str.startswith("```json"):
+            slides_json_str = slides_json_str[7:]
+        if slides_json_str.startswith("```"):
+            slides_json_str = slides_json_str[3:]
+        if slides_json_str.endswith("```"):
+            slides_json_str = slides_json_str[:-3]
         slides_data = json.loads(slides_json_str.strip())
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, AiReportError):
         slides_data = {"slides": [{"type": "error", "title": "Failed to parse slides JSON"}]}
 
-    return executive_synthesis, slides_data
+    return report_text, slides_data
 
 
 async def write_ai_report(path: Path, context: dict[str, Any]) -> dict[str, Any]:
@@ -518,7 +578,7 @@ async def write_ai_report(path: Path, context: dict[str, Any]) -> dict[str, Any]
     
     if ai_enabled():
         try:
-            report, slides_data = await map_reduce_ai_pipeline(context)
+            report, slides_data = await template_ai_pipeline(context)
             mode = "openai"
         except AiReportError as exc:
             error = str(exc)
@@ -543,3 +603,4 @@ async def write_ai_report(path: Path, context: dict[str, Any]) -> dict[str, Any]
             json.dump(slides_data, f, ensure_ascii=False, indent=2)
 
     return {"mode": mode, "error": error, "path": str(path), "slides_generated": bool(slides_data)}
+

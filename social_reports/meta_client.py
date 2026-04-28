@@ -64,6 +64,15 @@ class MetaClient(BasePlatformClient):
 
         return await self._get_paginated(f"{self.base_url}/insights", params)
 
+    async def get_account_currency(self) -> str:
+        params = {"access_token": self.access_token, "fields": "currency"}
+        async with aiohttp.ClientSession() as session:
+            try:
+                res = await self._get_json(session, self.base_url + "?" + urlencode(params))
+                return res.get("currency", "USD")
+            except Exception:
+                return "USD"
+
     async def _get_paginated(self, url: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         next_url = f"{url}?{urlencode(params)}"

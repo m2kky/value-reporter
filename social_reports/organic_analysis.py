@@ -40,22 +40,28 @@ def _rollup(rows: list[dict[str, Any]], group_key: str) -> list[dict[str, Any]]:
     return sorted(results, key=lambda item: (item["engagements"], item["views"]), reverse=True)
 
 
-def summarize_organic(rows: list[dict[str, Any]], warnings: list[str] | None = None) -> dict[str, Any]:
+def _totals_for(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a totals dict for a subset of rows."""
     total_posts = len(rows)
-    summary = {
-        "enabled": True,
-        "warnings": warnings or [],
-        "totals": {
-            "posts": total_posts,
-            "views": _metric_sum(rows, "views"),
-            "reach": _metric_sum(rows, "reach"),
-            "likes": _metric_sum(rows, "likes"),
-            "comments": _metric_sum(rows, "comments"),
-            "shares": _metric_sum(rows, "shares"),
-            "saves": _metric_sum(rows, "saves"),
-            "engagements": _metric_sum(rows, "engagements"),
-        },
-        "by_platform": _rollup(rows, "platform"),
+    totals = {
+        "posts": total_posts,
+        "views": _metric_sum(rows, "views"),
+        "reach": _metric_sum(rows, "reach"),
+        "likes": _metric_sum(rows, "likes"),
+        "comments": _metric_sum(rows, "comments"),
+        "shares": _metric_sum(rows, "shares"),
+        "saves": _metric_sum(rows, "saves"),
+        "engagements": _metric_sum(rows, "engagements"),
+    }
+    reach = totals["reach"]
+    totals["engagement_rate"] = totals["engagements"] / reach if reach else 0.0
+    return totals
+
+
+def _platform_detail(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a detailed breakdown for a single platform's rows."""
+    return {
+        "totals": _totals_for(rows),
         "by_format": _rollup(rows, "content_format"),
         "by_topic": _rollup(rows, "content_topic"),
         "top_content": sorted(
@@ -64,9 +70,40 @@ def summarize_organic(rows: list[dict[str, Any]], warnings: list[str] | None = N
             reverse=True,
         )[:10],
     }
-    reach = summary["totals"]["reach"]
-    summary["totals"]["engagement_rate"] = (
-        summary["totals"]["engagements"] / reach if reach else 0.0
-    )
+
+
+def summarize_organic(rows: list[dict[str, Any]], warnings: list[str] | None = None) -> dict[str, Any]:
+    total_posts = len(rows)
+
+    # Split rows by platform
+    fb_rows = [r for r in rows if r.get("platform") == "facebook"]
+    ig_rows = [r for r in rows if r.get("platform") == "instagram"]
+    stories_rows = [r for r in rows if r.get("platform") == "instagram_stories"]
+
+    summary = {
+        "enabled": True,
+        "warnings": warnings or [],
+        "totals": _totals_for(rows),
+        "by_platform": _rollup(rows, "platform"),
+        "by_format": _rollup(rows, "content_format"),
+        "by_topic": _rollup(rows, "content_topic"),
+        "top_content": sorted(
+            rows,
+            key=lambda row: (float(row.get("engagements") or 0), float(row.get("views") or 0)),
+            reverse=True,
+        )[:10],
+        # === Per-Platform Detailed Breakdowns ===
+        "facebook": _platform_detail(fb_rows) if fb_rows else {"totals": _totals_for([])},
+        "instagram": _platform_detail(ig_rows) if ig_rows else {"totals": _totals_for([])},
+        "stories": {
+            "available": len(stories_rows) > 0,
+            "totals": _totals_for(stories_rows),
+            "items": sorted(
+                stories_rows,
+                key=lambda r: (float(r.get("views") or 0)),
+                reverse=True,
+            )[:10] if stories_rows else [],
+        },
+    }
     return summary
 

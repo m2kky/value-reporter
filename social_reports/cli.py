@@ -13,7 +13,7 @@ from .date_windows import DateWindowError, resolve_month
 from .meta_client import MetaApiError, MetaClient
 from .metrics import aggregate, campaign_table, compare
 from .normalize import normalize_meta_rows
-from .organic import fetch_organic_content
+from .organic import fetch_organic_content, fetch_audience_demographics, fetch_page_level_insights, fetch_page_info
 from .organic_analysis import summarize_organic
 from .report import render_monthly_report
 from .storage import ensure_run_dirs, write_csv, write_json
@@ -161,6 +161,7 @@ async def run() -> int:
     current_summary = []
     previous_summary = []
     campaign_daily = []
+    account_currency = "USD"
 
     if not client.meta.enabled:
         logger.info("Meta Ads disabled, skipping paid data fetch.")
@@ -176,11 +177,13 @@ async def run() -> int:
         try:
             logger.info(f"Fetching Meta insights for account {account.id} (current month)")
             update_status(dirs, 2, f"Fetching Paid Data ({account.name or account.id})...")
-            current_summary_raw, previous_summary_raw, campaign_daily_raw = await asyncio.gather(
+            current_summary_raw, previous_summary_raw, campaign_daily_raw, account_currency_fetched = await asyncio.gather(
                 meta.fetch_insights(since=window.start, until=window.end, fields=account_fields),
                 meta.fetch_insights(since=window.previous_start, until=window.previous_end, fields=account_fields),
-                meta.fetch_insights(since=window.start, until=window.end, fields=client.meta.fields, level="campaign", time_increment=1)
+                meta.fetch_insights(since=window.start, until=window.end, fields=client.meta.fields, level="campaign", time_increment=1),
+                meta.get_account_currency()
             )
+            account_currency = account_currency_fetched
         except MetaApiError as error:
             logger.error(f"Meta API Error: {client.id}/{account.id}: {error}")
             raise MetaApiError(f"{client.id}/{account.id}: {error}") from error
@@ -233,6 +236,7 @@ async def run() -> int:
             "previous": previous_kpis,
             "changes_percent": changes,
             "campaigns": campaigns,
+            "currency": account_currency,
         },
     )
 
@@ -244,9 +248,19 @@ async def run() -> int:
     if client.organic.enabled:
         logger.info(f"Fetching organic content for {client.name} (current & previous months)")
         update_status(dirs, 3, "Fetching Organic Media & Insights...")
-        (organic_rows, organic_diagnostics), (organic_previous_rows, organic_previous_diagnostics) = await asyncio.gather(
+        
+        (
+            (organic_rows, organic_diagnostics),
+            (organic_previous_rows, organic_previous_diagnostics),
+            audience_demographics,
+            page_insights,
+            page_info,
+        ) = await asyncio.gather(
             fetch_organic_content(client.organic, api_version=client.meta.api_version, since=window.start, until=window.end),
-            fetch_organic_content(client.organic, api_version=client.meta.api_version, since=window.previous_start, until=window.previous_end)
+            fetch_organic_content(client.organic, api_version=client.meta.api_version, since=window.previous_start, until=window.previous_end),
+            fetch_audience_demographics(client.organic, api_version=client.meta.api_version),
+            fetch_page_level_insights(client.organic, api_version=client.meta.api_version, since=window.start, until=window.end),
+            fetch_page_info(client.organic, api_version=client.meta.api_version),
         )
 
         organic_summary = summarize_organic(
@@ -263,17 +277,32 @@ async def run() -> int:
         write_csv(dirs["processed"] / "organic_content_previous.csv", organic_previous_rows)
         write_json(dirs["processed"] / "organic_summary.json", organic_summary)
         write_json(dirs["processed"] / "organic_summary_previous.json", organic_previous_summary)
+        write_json(dirs["processed"] / "audience.json", audience_demographics)
+        write_json(dirs["processed"] / "page_insights.json", page_insights)
+        write_json(dirs["processed"] / "page_info.json", page_info)
         
-        # Conversations Step
-        logger.info(f"Fetching conversations for {client.name}")
+        # Conversations & Leads Step
+        logger.info(f"Fetching conversations and leads for {client.name}")
         from .conversations import fetch_conversations
-        conversations = await fetch_conversations(
-            client.organic,
-            api_version=client.meta.api_version,
-            since=window.start,
-            until=window.end,
+        from .leads import fetch_leads
+        
+        conversations, leads = await asyncio.gather(
+            fetch_conversations(
+                client.organic,
+                api_version=client.meta.api_version,
+                since=window.start,
+                until=window.end,
+            ),
+            fetch_leads(
+                client.organic,
+                api_version=client.meta.api_version,
+                since=window.start,
+                until=window.end,
+            )
         )
         write_json(dirs["processed"] / "conversations.json", conversations)
+        write_json(dirs["processed"] / "leads.json", leads)
+
 
     logger.info("Rendering markdown report")
     update_status(dirs, 4, "Generating Reports and synthesizing metrics...")
@@ -294,8 +323,8 @@ async def run() -> int:
     report_path.write_text(report, encoding="utf-8")
     logger.info(f"Report generated: {report_path}")
 
-    logger.info("Building AI context")
-    update_status(dirs, 5, "Connecting to AI Provider for narrative synthesis. This takes a moment...")
+    # Save AI context for on-demand AI generation from the dashboard
+    logger.info("Saving AI context for on-demand report generation")
     ai_context = build_ai_context(
         client_name=client.name,
         client_id=client.id,
@@ -311,15 +340,12 @@ async def run() -> int:
         organic_rows=organic_rows,
         organic_previous_rows=organic_previous_rows,
         conversations=conversations,
+        leads=leads,
     )
-    logger.info("Writing AI report")
-    # write_ai_report now needs to be async too
-    ai_report_status = await write_ai_report(dirs["root"] / "ai_monthly_report.md", ai_context)
     write_json(dirs["processed"] / "ai_report_context.json", ai_context)
-    write_json(dirs["processed"] / "ai_report_status.json", ai_report_status)
-    logger.info(f"AI report generated: {ai_report_status['path']} ({ai_report_status['mode']})")
+    logger.info("AI context saved. User can generate AI reports on-demand from the dashboard.")
     
-    update_status(dirs, 6, "Pipeline Completed Successfully! Review your report and export PPTX/PDF when ready.")
+    update_status(dirs, 5, "Pipeline Completed! Review your data and generate AI reports when ready.")
     return 0
 
 

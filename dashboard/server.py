@@ -60,6 +60,9 @@ PAID_METRIC_OPTIONS = [
 FACEBOOK_ORGANIC_METRIC_OPTIONS = [
     {"id": "post_impressions_unique", "label": "Post Reach"},
     {"id": "post_clicks", "label": "Post Clicks"},
+    {"id": "post_engaged_users", "label": "Post Engaged Users"},
+    {"id": "post_negative_feedback", "label": "Negative Feedback"},
+    {"id": "post_video_views_organic", "label": "Organic Video Views"},
 ]
 
 INSTAGRAM_ORGANIC_METRIC_OPTIONS = [
@@ -485,9 +488,19 @@ def read_details(query: dict[str, list[str]]) -> dict[str, Any]:
     organic_summary_path = processed / "organic_summary.json"
     ai_status_path = processed / "ai_report_status.json"
     organic_diagnostics_path = root / "raw" / "organic_diagnostics.json"
+    conversations_path = processed / "conversations.json"
+    audience_path = processed / "audience.json"
+    page_insights_path = processed / "page_insights.json"
+    page_info_path = processed / "page_info.json"
+    leads_path = processed / "leads.json"
 
     kpis = read_json(kpis_path) if kpis_path.exists() else {}
     organic_summary = read_json(organic_summary_path) if organic_summary_path.exists() else {}
+    conversations = read_json(conversations_path) if conversations_path.exists() else {}
+    audience = read_json(audience_path) if audience_path.exists() else {}
+    page_insights = read_json(page_insights_path) if page_insights_path.exists() else {}
+    page_info = read_json(page_info_path) if page_info_path.exists() else {}
+    leads = read_json(leads_path) if leads_path.exists() else {}
     ai_status = read_json(ai_status_path) if ai_status_path.exists() else {}
     organic_diagnostics = read_json(organic_diagnostics_path) if organic_diagnostics_path.exists() else {}
     warnings = organic_diagnostics.get("warnings", [])
@@ -511,6 +524,12 @@ def read_details(query: dict[str, list[str]]) -> dict[str, Any]:
     return {
         "ok": root.exists(),
         "root": str(root),
+        "kpis": kpis,
+        "conversations": conversations,
+        "audience": audience,
+        "page_insights": page_insights,
+        "page_info": page_info,
+        "leads": leads,
         "organic_summary": organic_summary,
         "organic_content": organic_content[:200],
         "campaigns": campaigns[:200],
@@ -583,6 +602,87 @@ def read_status(query: dict[str, list[str]]) -> dict[str, Any]:
             pass
             
     return {"ok": True, "step": 0, "message": "Initializing pipeline..."}
+
+def read_logs(query: dict[str, list[str]]) -> dict[str, Any]:
+    client_id = query.get("client_id", [""])[0]
+    period = query.get("period", [""])[0]
+    
+    if not client_id or not period:
+        return {"ok": False, "logs": "Missing client_id or period parameters"}
+        
+    log_path = output_root_for_client(client_id, period) / "pipeline.log"
+    if log_path.exists():
+        try:
+            return {"ok": True, "logs": log_path.read_text(encoding="utf-8")}
+        except Exception as e:
+            return {"ok": False, "logs": f"Error reading logs: {e}"}
+            
+    return {"ok": False, "logs": "No logs found for this run."}
+
+
+AI_TEMPLATES = [
+    {"id": "full", "label": "📊 Full Monthly Analysis", "description": "Complete paid + organic + conversations analysis"},
+    {"id": "content", "label": "📝 Content Performance Only", "description": "Focus on organic content quality and themes"},
+    {"id": "conversations", "label": "💬 Response Quality", "description": "Analyze messaging volume and response times"},
+    {"id": "kpi", "label": "🎯 KPI vs Targets", "description": "Compare actual results against your target KPIs"},
+    {"id": "custom", "label": "📋 Custom Analysis", "description": "Write your own prompt for the AI"},
+]
+
+
+def get_ai_templates() -> dict[str, Any]:
+    return {"ok": True, "templates": AI_TEMPLATES}
+
+
+def generate_ai_report(payload: dict[str, Any]) -> dict[str, Any]:
+    """Generate an AI report on-demand with template, language, and KPI targets."""
+    import asyncio
+    from social_reports.ai_report import write_ai_report, build_ai_context
+
+    client_id = payload.get("client_id", "client_demo")
+    period = payload.get("period", "")
+    template = payload.get("template", "full")
+    language = payload.get("language", "ar")
+    kpi_targets = payload.get("kpi_targets", [])
+    custom_prompt = payload.get("custom_prompt", "")
+
+    if not period:
+        raise ValueError("period is required")
+
+    root = output_root_for_client(client_id, period)
+    context_path = root / "processed" / "ai_report_context.json"
+
+    if not context_path.exists():
+        raise ValueError("No pipeline data found. Run the pipeline first to fetch data.")
+
+    context = read_json(context_path)
+
+    # Inject user KPI targets into context
+    if kpi_targets:
+        context["kpi_targets"] = kpi_targets
+
+    # Inject template and language preferences
+    context["ai_options"] = {
+        "template": template,
+        "language": language,
+        "custom_prompt": custom_prompt,
+    }
+
+    ai_report_path = root / "ai_monthly_report.md"
+    ai_report_status = asyncio.run(
+        write_ai_report(ai_report_path, context)
+    )
+    write_json(root / "processed" / "ai_report_status.json", ai_report_status)
+
+    report_content = ""
+    if ai_report_path.exists():
+        report_content = ai_report_path.read_text(encoding="utf-8")
+
+    return {
+        "ok": ai_report_status.get("mode") != "error",
+        "content": report_content,
+        "status": ai_report_status,
+    }
+
 
 
 def export_pptx(payload: dict[str, Any]) -> dict[str, Any]:
@@ -676,6 +776,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self.send_json(read_details(parse_qs(parsed.query)))
             elif parsed.path == "/api/status":
                 self.send_json(read_status(parse_qs(parsed.query)))
+            elif parsed.path == "/api/logs":
+                self.send_json(read_logs(parse_qs(parsed.query)))
+            elif parsed.path == "/api/ai-templates":
+                self.send_json(get_ai_templates())
             else:
                 self.send_error(HTTPStatus.NOT_FOUND)
         except Exception as error:  # pragma: no cover - diagnostics for local app
@@ -703,6 +807,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     self.send_file(Path(result["path"]), "application/pdf")
                 else:
                     self.send_json(result, 500)
+            elif parsed.path == "/api/ai-report":
+                self.send_json(generate_ai_report(payload))
             else:
                 self.send_error(HTTPStatus.NOT_FOUND)
         except Exception as error:  # pragma: no cover - diagnostics for local app

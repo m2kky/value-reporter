@@ -7,7 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css?v=5">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/styles.css?v=6">
   </head>
   <body>
     <div class="app-container">
@@ -228,11 +229,6 @@
                 <div class="step-line"></div>
                 <div class="step" id="step-5">
                   <div class="step-icon">5</div>
-                  <div class="step-text">AI Synthesis</div>
-                </div>
-                <div class="step-line"></div>
-                <div class="step" id="step-6">
-                  <div class="step-icon">6</div>
                   <div class="step-text">Done</div>
                 </div>
               </div>
@@ -251,11 +247,12 @@
           <div class="section-header row-between">
             <div>
               <h2>Report Results</h2>
-              <p>Generated narratives and data extracts</p>
+              <p>Review your data, then generate AI reports on demand</p>
             </div>
             <div style="display:flex;gap:10px;align-items:center;">
+              <button id="viewLogsBtn" class="btn-secondary">📄 View Logs</button>
               <button id="loadReportBtn" class="btn-secondary">Reload Results</button>
-              <button id="exportPptxBtn" class="btn-secondary" style="background:var(--lime);color:var(--bg);font-weight:700;">⬇ Export PPTX</button>
+              <button id="exportPptxBtn" class="btn-secondary" style="background:var(--lime,#a3e635);color:var(--bg);font-weight:700;">⬇ Export PPTX</button>
               <button id="exportPdfBtn" class="btn-secondary" style="background:var(--logo-blue,#2859af);color:#fff;font-weight:700;">⬇ Export PDF</button>
             </div>
           </div>
@@ -265,51 +262,182 @@
             <div id="warningsList" class="warning-content"></div>
           </div>
 
+          <!-- AI REPORT BUILDER -->
+          <div class="card ai-builder-card mt-4">
+            <div class="card-header">
+              <h3>🤖 AI Report Builder</h3>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <div class="input-group" style="margin:0;">
+                  <label style="font-size:11px;">Language</label>
+                  <select id="aiLanguageSelect" style="min-width:120px; height:32px; font-size:13px;">
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="form-body">
+              <p style="color:var(--muted); margin: 0 0 16px 0; font-size:14px;">Choose a report template, optionally set KPI targets, then click Generate.</p>
+              
+              <!-- Template Cards -->
+              <div id="aiTemplateCards" class="template-cards-grid"></div>
+
+              <!-- KPI Targets Builder -->
+              <div id="kpiTargetsSection" class="kpi-targets-section mt-4 hidden">
+                <div class="row-between" style="margin-bottom:12px;">
+                  <h4 style="margin:0;">🎯 KPI Targets</h4>
+                  <button id="addKpiBtn" class="btn-secondary" style="height:32px; font-size:13px; padding:0 12px;">+ Add KPI Target</button>
+                </div>
+                <div id="kpiTargetsList" class="kpi-targets-list"></div>
+                <div id="kpiAddRow" class="kpi-add-row mt-3 hidden">
+                  <select id="kpiMetricSelect" style="min-width:180px; height:36px;">
+                    <option value="">Select a metric...</option>
+                  </select>
+                  <input id="kpiTargetValue" type="number" placeholder="Target value" style="min-width:120px; height:36px;">
+                  <button id="confirmAddKpiBtn" class="btn-secondary" style="height:36px; padding:0 16px;">Add</button>
+                  <button id="cancelAddKpiBtn" class="btn-secondary" style="height:36px; padding:0 12px;">✕</button>
+                </div>
+              </div>
+
+              <!-- Custom Prompt -->
+              <div id="customPromptSection" class="mt-4 hidden">
+                <h4 style="margin:0 0 8px 0;">📋 Custom Prompt</h4>
+                <textarea id="customPromptInput" class="form-control" style="width:100%; min-height:120px; font-size:14px;" placeholder="Write your analysis instructions for the AI..."></textarea>
+              </div>
+
+              <!-- Generate Button -->
+              <div class="pipeline-action-bar" style="padding: 24px 0 8px;">
+                <button id="generateAiBtn" class="btn-massive" style="height:52px; padding:0 36px; font-size:16px;">
+                  🤖 Generate AI Report
+                </button>
+                <div id="aiGeneratingStatus" class="hidden" style="margin-top:12px; color:var(--accent); font-weight:600;">
+                  <span class="ai-spinner"></span> Generating AI report... This may take a moment.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div id="aiStatus" class="ai-banner hidden"></div>
 
-          <div class="results-grid">
+          <!-- Page Info Header -->
+          <div id="pageInfoHeader" class="hidden mt-4"></div>
+
+          <!-- Page Growth Insights -->
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>📈 Page Growth & Reach</h3>
+              <small class="text-muted">Powered by <code>read_insights</code> permission</small>
+            </div>
+            <div class="dashboard-body">
+              <div id="pageGrowthGrid" class="growth-kpi-grid"></div>
+            </div>
+          </div>
+
+          <!-- Per-Platform Content Breakdown -->
+          <div class="card mt-4">
+            <div class="dashboard-body" id="platformBreakdown"></div>
+          </div>
+
+          <!-- Lead Generation -->
+          <div class="card mt-4">
+            <div class="dashboard-body" id="leadsSection"></div>
+          </div>
+
+          <div class="results-grid mt-4">
             <div class="card result-card">
               <div class="card-header row-between">
                 <h3>AI Executive Report</h3>
                 <button id="toggleEditBtn" class="btn-secondary" style="padding: 4px 8px; font-size: 12px;">Edit Markdown</button>
               </div>
-              <article id="aiReportPreview" class="markdown-body"></article>
+              <article id="aiReportPreview" class="markdown-body"><p style="color:var(--muted); padding:40px; text-align:center;">No AI report generated yet. Use the builder above to create one.</p></article>
               <textarea id="aiReportEditor" class="form-control hidden" style="width: 100%; min-height: 500px; font-family: monospace; padding: 10px;"></textarea>
             </div>
 
-            <div class="card result-card">
-              <div class="card-header">
-                <h3>Standard Data Report</h3>
+            <div class="card result-card" style="grid-column: 1 / -1;">
+              <div class="card-header row-between">
+                <h3>📊 Performance Dashboard</h3>
               </div>
-              <article id="reportPreview" class="markdown-body"></article>
+              <div class="dashboard-body">
+                <!-- Dynamic KPI Grid -->
+                <div id="kpiGrid" class="kpi-dashboard-grid"></div>
+                
+                <!-- Charts Row -->
+                <div class="charts-row mt-4">
+                  <div class="chart-container">
+                    <h4>Campaign Spend vs Conversions</h4>
+                    <canvas id="campaignChart"></canvas>
+                  </div>
+                  <div class="chart-container">
+                    <h4>Organic Engagement by Format</h4>
+                    <canvas id="organicFormatChart"></canvas>
+                  </div>
+                </div>
+                
+                <!-- Secondary Charts Row -->
+                <div class="charts-row mt-4">
+                  <div class="chart-container">
+                    <h4>Organic Topics Engagement</h4>
+                    <canvas id="organicTopicsChart"></canvas>
+                  </div>
+                  <div class="chart-container">
+                    <h4>Platform Share</h4>
+                    <canvas id="platformShareChart"></canvas>
+                  </div>
+                </div>
+
+                <!-- Audience Demographics Row -->
+                <div class="charts-row mt-4">
+                  <div class="chart-container">
+                    <h4>👥 Audience Age & Gender</h4>
+                    <canvas id="audienceDemographicsChart"></canvas>
+                  </div>
+                  <div class="chart-container">
+                    <h4>📍 المدن الأكثر تفاعلاً (Top Cities)</h4>
+                    <canvas id="audienceCitiesChart"></canvas>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div class="card mt-4">
             <div class="card-header">
-              <h3>Top Organic Content</h3>
+              <h3>📊 Full KPI Breakdown</h3>
             </div>
             <div class="table-responsive">
               <table class="modern-table">
                 <thead>
                   <tr>
-                    <th>Platform</th>
-                    <th>Format</th>
-                    <th>Topic</th>
-                    <th>Views</th>
-                    <th>Engagements</th>
-                    <th>ER</th>
-                    <th>Preview</th>
+                    <th>Metric</th>
+                    <th>Current Value</th>
+                    <th>Previous Value</th>
+                    <th>Change (%)</th>
                   </tr>
                 </thead>
-                <tbody id="contentRows"></tbody>
+                <tbody id="fullKpiRows"></tbody>
               </table>
             </div>
           </div>
 
           <div class="card mt-4">
+            <div class="card-header row-between">
+              <h3>أفضل المحتوى (Top Content by Views)</h3>
+              <div class="header-actions">
+                <select id="contentPlatformFilter" class="form-select form-select-sm" onchange="renderContentRows(state.organicContent || [])">
+                  <option value="all">All Channels (Cross-posted)</option>
+                  <option value="facebook">Facebook Only</option>
+                  <option value="instagram">Instagram Only</option>
+                </select>
+              </div>
+            </div>
+            <div class="dashboard-body">
+              <div id="contentGrid" class="content-media-grid"></div>
+            </div>
+          </div>
+
+          <div class="card mt-4">
             <div class="card-header">
-              <h3>Top Paid Campaigns</h3>
+              <h3>النتائج المدفوعة (Paid Results)</h3>
             </div>
             <div class="table-responsive">
               <table class="modern-table">
@@ -328,10 +456,125 @@
               </table>
             </div>
           </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>💬 Customer Service & Messaging</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Platform/Page ID</th>
+                    <th>Total Conversations</th>
+                    <th>Unanswered</th>
+                    <th>Avg Response Time</th>
+                    <th>Response Rate</th>
+                  </tr>
+                </thead>
+                <tbody id="conversationRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>💸 Campaign Cost Efficiency</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Objective</th>
+                    <th>Cost per Click (CPC)</th>
+                    <th>Cost per 1k Impressions (CPM)</th>
+                    <th>Cost per Result (CPA)</th>
+                  </tr>
+                </thead>
+                <tbody id="efficiencyRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>📘 Top Facebook Posts</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Format</th>
+                    <th>Topic</th>
+                    <th>Views</th>
+                    <th>Reach</th>
+                    <th>Engagements</th>
+                    <th>ER</th>
+                    <th>Preview</th>
+                  </tr>
+                </thead>
+                <tbody id="facebookContentRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>📸 Top Instagram Media</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Format</th>
+                    <th>Topic</th>
+                    <th>Views</th>
+                    <th>Saves</th>
+                    <th>Engagements</th>
+                    <th>ER</th>
+                    <th>Preview</th>
+                  </tr>
+                </thead>
+                <tbody id="instagramContentRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <h3>📋 Organic Topics & Formats Summary</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Topic / Format</th>
+                    <th>Total Posts</th>
+                    <th>Total Engagements</th>
+                    <th>Avg ER</th>
+                  </tr>
+                </thead>
+                <tbody id="topicsSummaryRows"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
+
+        <!-- LOGS MODAL -->
+        <div id="logsModal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <h2 style="margin:0;">Pipeline Logs & Errors</h2>
+              <button id="closeLogsBtn" class="btn-secondary" style="padding:4px 8px; font-size:16px;">&times;</button>
+            </div>
+            <pre id="logsViewer" class="terminal-logs" style="max-height: 70vh; overflow-y: auto; margin-top: 15px; display: block;"></pre>
+          </div>
+        </div>
 
       </main>
     </div>
     <script src="/app.js?v=5"></script>
   </body>
 </html>
+

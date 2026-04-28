@@ -30,11 +30,15 @@ DEFAULT_META_FIELDS = [
 ]
 
 DEFAULT_FACEBOOK_POST_INSIGHT_METRICS = [
-    "post_impressions_unique",
-    "post_impressions",
-    "post_clicks",
-    "post_video_views",
-    "post_reactions_by_type_total",
+    "post_impressions_unique",      # Reach (unique users who saw the post)
+    "post_media_view",              # Views (new metric, replaces post_impressions)
+    "post_clicks",                  # Total clicks on the post
+    "post_video_views",             # 3-second video views
+    "post_video_views_organic",     # Organic 3-second video views
+    "post_reactions_by_type_total", # Reaction breakdown (like, love, etc.)
+    # Deprecated in v25.0+:
+    # "post_impressions",           # Replaced by post_media_view
+    # "post_engaged_users",         # No longer available
 ]
 
 DEFAULT_INSTAGRAM_MEDIA_INSIGHT_METRICS = [
@@ -93,6 +97,8 @@ class OrganicConfig:
     instagram_access_token: str = ""
     facebook_enabled: bool = True
     instagram_enabled: bool = True
+    whatsapp_business_account_id_env: str = "META_WHATSAPP_BUSINESS_ACCOUNT_ID"
+    whatsapp_business_account_id: str = ""
     max_facebook_posts: int = 200
     max_instagram_media: int = 200
     facebook_post_insight_metrics: list[str] = field(
@@ -267,6 +273,8 @@ def _organic_from_dict(data: dict[str, Any]) -> OrganicConfig:
         instagram_access_token=instagram_access_token,
         facebook_enabled=bool(data.get("facebook_enabled", True)),
         instagram_enabled=bool(data.get("instagram_enabled", True)),
+        whatsapp_business_account_id_env=data.get("whatsapp_business_account_id_env", "META_WHATSAPP_BUSINESS_ACCOUNT_ID"),
+        whatsapp_business_account_id=data.get("whatsapp_business_account_id", "") or _read_env(data.get("whatsapp_business_account_id_env", "META_WHATSAPP_BUSINESS_ACCOUNT_ID")),
         max_facebook_posts=int(data.get("max_facebook_posts", 100)),
         max_instagram_media=int(data.get("max_instagram_media", 100)),
         facebook_post_insight_metrics=list(

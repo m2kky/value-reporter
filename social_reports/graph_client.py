@@ -55,7 +55,8 @@ class GraphClient(BasePlatformClient):
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(4),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, GraphApiError))
+        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, GraphApiError)),
+        reraise=True
     )
     async def _get_json(self, session: aiohttp.ClientSession, url: str) -> dict[str, Any]:
         try:

@@ -3,10 +3,10 @@
 import logging
 from typing import Any
 from datetime import datetime, date, timezone
-from dateutil.parser import parse as parse_date
+from .organic import parse_graph_time
 
 from .graph_client import GraphClient
-from .config_parser import OrganicConfig
+from .config import OrganicConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,27 +34,71 @@ async def fetch_conversations(
     graph = GraphClient(access_token=page_token, api_version=api_version)
     
     try:
-        # Fetch up to 15 recent conversations and their messages
-        url = f"/{organic.page_id}/conversations"
-        params = {
+        # Fetch Facebook conversations
+        fb_url = f"/{organic.page_id}/conversations"
+        fb_params = {
             "fields": "messages{message,from,created_time,to}",
-            "limit": "15"
+            "limit": "50"
         }
-        
-        response = await graph.get(url, params)
-        conversations = response.get("data", [])
-        
+        fb_conversations = await graph.get_paginated(fb_url, fb_params, max_rows=100)
     except Exception as error:
-        diagnostics["warnings"].append(f"Conversations fetch failed (ensure token has pages_messaging permission): {error}")
-        return {"diagnostics": diagnostics}
+        diagnostics["warnings"].append(f"FB Conversations fetch failed: {error}")
+        fb_conversations = []
 
-    total_conversations = len(conversations)
+    ig_conversations = []
+    if organic.instagram_enabled:
+        ig_id = organic.instagram_account_id
+        if not ig_id:
+            try:
+                acct = await graph.get(f"/{organic.page_id}", {"fields": "instagram_business_account{id}"})
+                ig_id = (acct.get("instagram_business_account") or {}).get("id")
+            except Exception:
+                pass
+                
+        if ig_id:
+            try:
+                ig_url = f"/{ig_id}/conversations"
+                ig_params = {
+                    "platform": "instagram",
+                    "fields": "messages{message,from,created_time,to}",
+                    "limit": "50"
+                }
+                ig_conversations = await graph.get_paginated(ig_url, ig_params, max_rows=100)
+            except Exception as error:
+                diagnostics["warnings"].append(f"IG Conversations fetch failed (needs instagram_manage_messages): {error}")
+
+    wa_conversations_count = 0
+    if hasattr(organic, "whatsapp_business_account_id") and organic.whatsapp_business_account_id:
+        try:
+            # WhatsApp Cloud API does not expose historical message text via Graph API.
+            # We fetch analytics instead (requires whatsapp_business_management)
+            wa_id = organic.whatsapp_business_account_id
+            wa_res = await graph.get(f"/{wa_id}/conversation_analytics", {
+                "start": int(datetime.combine(since, datetime.min.time(), tzinfo=timezone.utc).timestamp()),
+                "end": int(datetime.combine(until, datetime.max.time(), tzinfo=timezone.utc).timestamp()),
+                "granularity": "MONTH"
+            })
+            for dp in wa_res.get("data", []):
+                for dp_inner in dp.get("data_points", []):
+                    wa_conversations_count += dp_inner.get("conversation", 0)
+        except Exception as error:
+            diagnostics["warnings"].append(f"WhatsApp Analytics fetch failed (check ID and permissions): {error}")
+
+    all_conversations = fb_conversations + ig_conversations
+    total_conversations = len(all_conversations)
     messages_received = 0
     messages_sent = 0
     response_times = []  # in seconds
     responded_conversations = 0
+    
+    # Store transcripts for AI analysis
+    transcripts = {
+        "facebook": [],
+        "instagram": [],
+        "whatsapp": ["WhatsApp message transcripts cannot be fetched historically via the Meta API. They require real-time Webhook infrastructure (like ValueWats)."]
+    }
 
-    for conv in conversations:
+    for conv in all_conversations:
         messages = conv.get("messages", {}).get("data", [])
         if not messages:
             continue
@@ -65,16 +109,32 @@ async def fetch_conversations(
         customer_msg_time = None
         has_reply = False
         
+        platform = "facebook"
+        if conv in ig_conversations:
+            platform = "instagram"
+            
+        transcript_lines = []
+        
         for msg in messages:
             sender = msg.get("from", {}).get("id")
             created_time_str = msg.get("created_time")
+            text = msg.get("message", "")
+            
             if not created_time_str:
                 continue
                 
-            msg_time = parse_date(created_time_str)
+            msg_time = parse_graph_time(created_time_str)
+            if not msg_time:
+                continue
             
-            # If sender is not the page
-            if sender != organic.page_id:
+            # Identify if sender is the business
+            is_business = (sender == organic.page_id) or (organic.instagram_enabled and sender == organic.instagram_account_id)
+            
+            if text:
+                sender_name = "Business" if is_business else "Customer"
+                transcript_lines.append(f"{sender_name}: {text}")
+
+            if not is_business:
                 messages_received += 1
                 if customer_msg_time is None:
                     customer_msg_time = msg_time
@@ -91,14 +151,19 @@ async def fetch_conversations(
 
         if has_reply:
             responded_conversations += 1
+            
+        if transcript_lines:
+            transcripts[platform].append("\n".join(transcript_lines[:15]))  # Keep up to 15 messages per convo for context
 
     avg_response_time_seconds = 0
     if response_times:
         avg_response_time_seconds = sum(response_times) / len(response_times)
 
+    total_conversations += wa_conversations_count
+    
     response_rate = 0
-    if total_conversations > 0:
-        response_rate = (responded_conversations / total_conversations) * 100
+    if len(all_conversations) > 0:
+        response_rate = (responded_conversations / len(all_conversations)) * 100
 
     # Format average response time for display
     avg_display = "N/A"
@@ -118,5 +183,6 @@ async def fetch_conversations(
         "response_rate": response_rate,
         "avg_response_time_seconds": avg_response_time_seconds,
         "avg_response_time_display": avg_display,
+        "transcripts": transcripts,
         "diagnostics": diagnostics
     }
