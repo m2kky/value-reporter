@@ -49,6 +49,15 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   });
 });
 
+// Content Tabs Navigation
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('content-tab-btn')) {
+    document.querySelectorAll('.content-tab-btn').forEach(btn => btn.classList.remove('active'));
+    e.target.classList.add('active');
+    renderContentRows(state.organicContent || []);
+  }
+});
+
 function showToast(message, type = 'info') {
   const el = $('status');
   el.textContent = message;
@@ -231,6 +240,8 @@ function renderAssets() {
   renderInstagramSelect();
   $("facebookEnabled").checked = Boolean(client.organic.facebook_enabled);
   $("instagramEnabled").checked = Boolean(client.organic.instagram_enabled);
+  if ($("tiktokEnabled")) $("tiktokEnabled").checked = Boolean(client.organic.tiktok_enabled);
+  if ($("tiktokTokenInput")) $("tiktokTokenInput").value = client.organic.tiktok_access_token || "";
 }
 
 function renderInstagramSelect() {
@@ -319,6 +330,8 @@ function payloadFromForm() {
     organic_enabled: true,
     facebook_enabled: $("facebookEnabled").checked,
     instagram_enabled: $("instagramEnabled").checked,
+    tiktok_enabled: $("tiktokEnabled").checked,
+    tiktok_access_token: $("tiktokTokenInput").value.trim(),
     page_id: $("pageSelect").value,
     page_name: selectedPageName(),
     instagram_account_id: $("instagramSelect").value,
@@ -651,9 +664,9 @@ function renderPageGrowthCards(insights) {
   }
 
   const growthMetrics = [
-    { label: "Page Reach", value: insights.page_impressions_unique || 0, icon: "👁️" },
-    { label: "Page Impressions", value: insights.page_impressions || 0, icon: "📊" },
-    { label: "Page Views", value: insights.page_views_total || 0, icon: "🔍" },
+    { label: "Page Views", value: insights.page_media_view || insights.page_impressions || 0, icon: "👁️" },
+    { label: "Unique Viewers", value: insights.page_total_media_view_unique || insights.page_impressions_unique || 0, icon: "📊" },
+    { label: "Profile Visits", value: insights.page_views_total || 0, icon: "🔍" },
     { label: "Post Engagements", value: insights.page_post_engagements || 0, icon: "💬" },
     { label: "Video Views", value: insights.page_video_views || 0, icon: "🎬" },
     { label: "New Fans", value: insights.page_fan_adds || 0, icon: "➕", isGood: true },
@@ -882,7 +895,9 @@ function renderPlatformBreakdown(organicSummary) {
   const platforms = [
     { key: "facebook", name: "Facebook", icon: "📘", color: "#1877F2", data: organicSummary.facebook },
     { key: "instagram", name: "Instagram", icon: "📸", color: "#E4405F", data: organicSummary.instagram },
-  ];
+    { key: "tiktok", name: "TikTok", icon: "🎵", color: "#000000", data: organicSummary.tiktok },
+    { key: "threads", name: "Threads", icon: "🧵", color: "#000000", data: organicSummary.threads },
+  ].filter(p => p.data && p.data.totals && p.data.totals.posts > 0);
 
   const stories = organicSummary.stories || {};
   
@@ -1051,13 +1066,28 @@ function renderContentRows(rows) {
   }
 
   const filter = $("contentPlatformFilter") ? $("contentPlatformFilter").value : "all";
+  const formatTab = document.querySelector(".content-tab-btn.active");
+  const formatFilter = formatTab ? formatTab.dataset.format : "all";
   
+  // First apply format filter
+  let filteredRows = rows;
+  if (formatFilter !== "all") {
+    filteredRows = rows.filter(r => {
+      const fmt = (r.content_format || "").toUpperCase();
+      if (formatFilter === "reels") return fmt === "REEL";
+      if (formatFilter === "live") return fmt === "VIDEO"; // Map Live/Video together
+      if (formatFilter === "stories") return fmt === "STORY" || r.platform === "instagram_stories";
+      if (formatFilter === "posts") return ["IMAGE", "CAROUSEL", "TEXT", "LINK"].includes(fmt) || (fmt !== "REEL" && fmt !== "VIDEO" && fmt !== "STORY");
+      return true;
+    });
+  }
+
   // Cross-post aggregation logic
   let displayItems = [];
   
   if (filter === "all") {
     const grouped = {};
-    for (const row of rows) {
+    for (const row of filteredRows) {
       // Normalize text to find matches (first 30 chars, lowercase, alphanumeric only)
       const text = (row.text_preview || row.content_id || "").toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, "");
       const key = text.substring(0, 30) || row.content_id;
@@ -1084,9 +1114,9 @@ function renderContentRows(rows) {
     }
     displayItems = Object.values(grouped);
   } else {
-    displayItems = rows.filter(r => r.platform === filter).map(r => ({
+    displayItems = filteredRows.filter(r => (r.platform || "").toLowerCase() === filter).map(r => ({
       ...r,
-      platforms: new Set([r.platform]),
+      platforms: new Set([(r.platform || "").toLowerCase()]),
       total_views: Number(r.views || 0),
       total_likes: Number(r.likes || 0),
       total_comments: Number(r.comments || 0),
@@ -1105,6 +1135,8 @@ function renderContentRows(rows) {
     let iconsHtml = "";
     if (item.platforms.has("facebook")) iconsHtml += `<span class="platform-icon-overlay fb-icon">f</span>`;
     if (item.platforms.has("instagram") || item.platforms.has("instagram_stories")) iconsHtml += `<span class="platform-icon-overlay ig-icon">📸</span>`;
+    if (item.platforms.has("tiktok")) iconsHtml += `<span class="platform-icon-overlay tiktok-icon">🎵</span>`;
+    if (item.platforms.has("threads")) iconsHtml += `<span class="platform-icon-overlay threads-icon">🧵</span>`;
 
     const formatBadge = item.content_format === "VIDEO" || item.content_format === "REEL" ? "🎬" : 
                         item.content_format === "CAROUSEL" ? "📑" : "📷";

@@ -78,6 +78,8 @@ def summarize_organic(rows: list[dict[str, Any]], warnings: list[str] | None = N
     # Split rows by platform
     fb_rows = [r for r in rows if r.get("platform") == "facebook"]
     ig_rows = [r for r in rows if r.get("platform") == "instagram"]
+    tiktok_rows = [r for r in rows if r.get("platform") == "TikTok"]
+    threads_rows = [r for r in rows if r.get("platform") == "threads"]
     stories_rows = [r for r in rows if r.get("platform") == "instagram_stories"]
 
     summary = {
@@ -95,6 +97,8 @@ def summarize_organic(rows: list[dict[str, Any]], warnings: list[str] | None = N
         # === Per-Platform Detailed Breakdowns ===
         "facebook": _platform_detail(fb_rows) if fb_rows else {"totals": _totals_for([])},
         "instagram": _platform_detail(ig_rows) if ig_rows else {"totals": _totals_for([])},
+        "tiktok": _platform_detail(tiktok_rows) if tiktok_rows else {"totals": _totals_for([])},
+        "threads": _platform_detail(threads_rows) if threads_rows else {"totals": _totals_for([])},
         "stories": {
             "available": len(stories_rows) > 0,
             "totals": _totals_for(stories_rows),

@@ -30,15 +30,16 @@ DEFAULT_META_FIELDS = [
 ]
 
 DEFAULT_FACEBOOK_POST_INSIGHT_METRICS = [
-    "post_impressions_unique",      # Reach (unique users who saw the post)
-    "post_media_view",              # Views (new metric, replaces post_impressions)
-    "post_clicks",                  # Total clicks on the post
-    "post_video_views",             # 3-second video views
-    "post_video_views_organic",     # Organic 3-second video views
-    "post_reactions_by_type_total", # Reaction breakdown (like, love, etc.)
-    # Deprecated in v25.0+:
-    # "post_impressions",           # Replaced by post_media_view
-    # "post_engaged_users",         # No longer available
+    # === New v25.0+ Media View metrics (Nov 2025+) ===
+    "post_media_view",                  # Total views (replaces post_impressions)
+    "post_total_media_view_unique",     # Unique reach (replaces post_impressions_unique)
+    "post_clicks",                      # Total clicks on the post
+    "post_video_views",                 # 3-second video views
+    "post_video_views_organic",         # Organic 3-second video views
+    "post_reactions_by_type_total",     # Reaction breakdown (like, love, etc.)
+    # === Legacy fallbacks (may return 0 on v25+, kept for older API versions) ===
+    "post_impressions_unique",          # DEPRECATED: use post_total_media_view_unique
+    "post_impressions",                 # DEPRECATED: use post_media_view
 ]
 
 DEFAULT_INSTAGRAM_MEDIA_INSIGHT_METRICS = [
@@ -51,6 +52,15 @@ DEFAULT_INSTAGRAM_MEDIA_INSIGHT_METRICS = [
     "total_interactions",
     "plays",
     "ig_reels_aggregated_all_plays_count",
+    "navigation",
+    "profile_activity",
+]
+
+DEFAULT_TIKTOK_VIDEO_METRICS = [
+    "view_count",
+    "like_count",
+    "comment_count",
+    "share_count"
 ]
 
 
@@ -106,6 +116,12 @@ class OrganicConfig:
     )
     instagram_media_insight_metrics: list[str] = field(
         default_factory=lambda: DEFAULT_INSTAGRAM_MEDIA_INSIGHT_METRICS.copy()
+    )
+    tiktok_enabled: bool = False
+    tiktok_access_token: str = ""
+    max_tiktok_videos: int = 100
+    tiktok_video_metrics: list[str] = field(
+        default_factory=lambda: DEFAULT_TIKTOK_VIDEO_METRICS.copy()
     )
 
 
@@ -283,6 +299,9 @@ def _organic_from_dict(data: dict[str, Any]) -> OrganicConfig:
         instagram_media_insight_metrics=list(
             data.get("instagram_media_insight_metrics", DEFAULT_INSTAGRAM_MEDIA_INSIGHT_METRICS)
         ),
+        tiktok_enabled=bool(data.get("tiktok_enabled", False)),
+        tiktok_access_token=data.get("tiktok_access_token", ""),
+        max_tiktok_videos=int(data.get("max_tiktok_videos", 100)),
     )
 
 

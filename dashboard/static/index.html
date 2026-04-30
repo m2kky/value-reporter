@@ -118,6 +118,7 @@
                 <div class="toggle-group">
                   <label class="toggle"><input id="facebookEnabled" type="checkbox"> <span>Facebook</span></label>
                   <label class="toggle"><input id="instagramEnabled" type="checkbox"> <span>Instagram</span></label>
+                  <label class="toggle"><input id="tiktokEnabled" type="checkbox"> <span>TikTok</span></label>
                 </div>
                 <div class="input-group mt-3">
                   <label>Facebook Page</label>
@@ -151,6 +152,15 @@
                   </label>
                   <input type="password" id="organicTokenInput" placeholder="EAAP... (Must have pages_read_engagement)" class="form-control" />
                   <div id="organicTokenStatus" class="token-status"></div>
+                </div>
+              </div>
+              <div class="token-row mt-4">
+                <div style="flex: 1;">
+                  <label class="form-label" for="tiktokTokenInput">
+                    TikTok Access Token
+                  </label>
+                  <input type="password" id="tiktokTokenInput" placeholder="act.xxx..." class="form-control" />
+                  <div id="tiktokTokenStatus" class="token-status"></div>
                 </div>
               </div>
               <div class="token-row mt-4">
@@ -420,13 +430,24 @@
           </div>
 
           <div class="card mt-4">
-            <div class="card-header row-between">
-              <h3>أفضل المحتوى (Top Content by Views)</h3>
+            <div class="card-header row-between" style="flex-wrap: wrap; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+                <h3 style="margin: 0;">أفضل المحتوى (Top Content by Views)</h3>
+                <div class="content-tabs" id="contentFormatTabs">
+                  <button class="content-tab-btn active" data-format="all">All</button>
+                  <button class="content-tab-btn" data-format="reels">Reels</button>
+                  <button class="content-tab-btn" data-format="live">Live / Video</button>
+                  <button class="content-tab-btn" data-format="posts">Posts</button>
+                  <button class="content-tab-btn" data-format="stories">Stories</button>
+                </div>
+              </div>
               <div class="header-actions">
                 <select id="contentPlatformFilter" class="form-select form-select-sm" onchange="renderContentRows(state.organicContent || [])">
                   <option value="all">All Channels (Cross-posted)</option>
                   <option value="facebook">Facebook Only</option>
                   <option value="instagram">Instagram Only</option>
+                  <option value="tiktok">TikTok Only</option>
+                  <option value="threads">Threads Only</option>
                 </select>
               </div>
             </div>

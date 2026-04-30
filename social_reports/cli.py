@@ -127,6 +127,10 @@ async def run() -> int:
         ig_token_state = "token ok" if client.organic.instagram_access_token else f"missing {client.organic.instagram_access_token_env}"
         ig_id_state = "ig id ok" if client.organic.instagram_account_id else f"optional {client.organic.instagram_account_id_env}"
         logger.info(f"Instagram organic: {ig_token_state}, {ig_id_state}")
+        
+        if client.organic.tiktok_enabled:
+            tiktok_state = "token ok" if client.organic.tiktok_access_token else "missing tiktok_access_token"
+            logger.info(f"TikTok organic: {tiktok_state}")
         return 0
 
     if not client.meta.enabled and not client.organic.enabled:

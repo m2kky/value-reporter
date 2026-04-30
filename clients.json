@@ -3,7 +3,7 @@
     {
       "id": "client_demo",
       "name": "Client Demo",
-      "output_folder": "NASA International Schools",
+      "output_folder": "Greens US",
       "timezone": "Africa/Cairo",
       "currency": "EGP",
       "platforms": {
@@ -13,9 +13,9 @@
           "api_version_env": "META_API_VERSION",
           "accounts": [
             {
-              "id": "nasa_intrnational_schools",
-              "name": "Nasa Intrnational Schools",
-              "ad_account_id": "act_9940385789409245"
+              "id": "greens",
+              "name": "Greens",
+              "ad_account_id": "act_1203321098540853"
             }
           ],
           "levels": [
@@ -62,10 +62,12 @@
           ],
           "facebook_enabled": true,
           "instagram_enabled": true,
+          "tiktok_enabled": true,
+          "tiktok_access_token": "act.w4I1Fmlr9vRj1YmdOGs1JcInbtriNmBDTdfYjWhhFhDi75JtKtuU8T4YzZlL!4819.s1",
           "max_facebook_posts": 100,
           "max_instagram_media": 100,
-          "page_id": "359509670571259",
-          "instagram_account_id": "17841467435383212",
+          "page_id": "922125637660584",
+          "instagram_account_id": "17841480656137445",
           "facebook_post_insight_metrics": [
             "post_impressions_unique",
             "post_clicks",

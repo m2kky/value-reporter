@@ -1580,6 +1580,15 @@ button {
   background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%,#d6249f 60%,#285AEB 90%);
 }
 
+.platform-icon-overlay.tiktok-icon {
+  background: #000000;
+  text-shadow: 1px 1px 0 #25F4EE, -1px -1px 0 #FE2C55;
+}
+
+.platform-icon-overlay.threads-icon {
+  background: #000000;
+}
+
 .media-content {
   padding: 12px;
   flex: 1;
@@ -1634,4 +1643,36 @@ button {
   right: 0;
   bottom: 0;
   z-index: 10;
+}
+
+/* Content Filtering Tabs */
+.content-tabs {
+  display: flex;
+  background: var(--surface-hover);
+  padding: 4px;
+  border-radius: 8px;
+  gap: 4px;
+}
+
+.content-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.content-tab-btn:hover {
+  color: var(--ink);
+  background: rgba(0,0,0,0.05);
+}
+
+.content-tab-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
 }

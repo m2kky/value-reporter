@@ -8,6 +8,8 @@ from .config import OrganicConfig
 from .graph_client import GraphApiError, GraphClient
 from .base_client import PlatformApiError
 from .normalize import to_float, to_int
+from .tiktok import run_tiktok_pipeline
+from .threads import run_threads_pipeline
 
 
 def parse_graph_time(value: str) -> datetime | None:
@@ -84,9 +86,12 @@ async def _fetch_insights_resilient(
             # Suppress logs for metrics known to be deprecated on newer API versions
             deprecated_or_optional = [
                 "post_engaged_users", "post_negative_feedback",
-                "post_impressions", "post_reactions_by_type_total",
+                "post_impressions", "post_impressions_unique",
+                "post_reactions_by_type_total",
                 "post_video_views", "post_media_view",
+                "post_total_media_view_unique",
                 "plays", "ig_reels_aggregated_all_plays_count",
+                "navigation", "profile_activity",
             ]
             if metric not in deprecated_or_optional:
                 warnings.append(f"{object_id}: metric '{metric}' unavailable.")
@@ -217,6 +222,73 @@ async def fetch_organic_content(
         except Exception as error:
             diagnostics["warnings"].append(f"Instagram Stories fetch failed: {error}")
 
+    if organic.tiktok_enabled and organic.tiktok_access_token:
+        try:
+            tiktok_data = await run_tiktok_pipeline(organic.tiktok_access_token, max_videos=organic.max_tiktok_videos)
+            
+            # Save raw data for diagnostics
+            diagnostics["tiktok_profile_raw"] = tiktok_data.get("profile", {})
+            diagnostics["tiktok_videos_raw"] = tiktok_data.get("videos", [])
+            
+            for video in tiktok_data.get("videos", []):
+                # TikTok create_time is a Unix timestamp integer
+                created_at = datetime.fromtimestamp(video.get("create_time", 0))
+                if not (since <= created_at.date() <= until):
+                    continue
+                    
+                metrics = {
+                    "views": video.get("view_count", 0),
+                    "likes": video.get("like_count", 0),
+                    "comments": video.get("comment_count", 0),
+                    "shares": video.get("share_count", 0)
+                }
+                
+                engagement = metrics["likes"] + metrics["comments"] + metrics["shares"]
+                
+                rows.append({
+                    "id": str(video.get("id")),
+                    "platform": "TikTok",
+                    "format": "VIDEO",
+                    "created_at": created_at.isoformat(),
+                    "text": repair_mojibake(video.get("video_description", "")),
+                    "topic": classify_topic(video.get("video_description", "")),
+                    "url": video.get("share_url", ""),
+                    "thumbnail_url": video.get("cover_image_url", ""),
+                    "reach": metrics["views"],  # TikTok doesn't provide unique reach via video.list, use views
+                    "views": metrics["views"],
+                    "engagement": engagement,
+                    "likes": metrics["likes"],
+                    "comments": metrics["comments"],
+                    "shares": metrics["shares"],
+                    "saves": 0,
+                    "video_views": metrics["views"],
+                    "engagement_rate": round((engagement / metrics["views"]) * 100, 2) if metrics["views"] else 0,
+                    "comments_list": [],
+                    "raw_metrics": metrics
+                })
+        except Exception as error:
+            diagnostics["warnings"].append(f"TikTok fetch failed: {error}")
+
+    # --- Threads: Auto-detect from Instagram/organic token ---
+    try:
+        threads_token = organic.instagram_access_token or page_token
+        if threads_token:
+            threads_data = await run_threads_pipeline(
+                access_token=threads_token,
+                since=since,
+                until=until,
+            )
+            if threads_data.get("available"):
+                diagnostics["threads_profile_raw"] = threads_data.get("profile", {})
+                threads_posts = threads_data.get("posts", [])
+                # Classify topics for each post
+                for post in threads_posts:
+                    post["topic"] = classify_topic(post.get("text", ""))
+                rows.extend(threads_posts)
+                logger.info(f"Threads: fetched {len(threads_posts)} posts")
+    except Exception as error:
+        diagnostics["warnings"].append(f"Threads auto-detect skipped: {error}")
+
     return rows, diagnostics
 
 
@@ -293,9 +365,12 @@ async def fetch_page_level_insights(
     graph = GraphClient(access_token=page_token, api_version=api_version)
 
     # Daily metrics aggregated over the period
+    # v25.0+: page_media_view / page_total_media_view_unique replace legacy impressions
     daily_metrics = [
-        "page_impressions",
-        "page_impressions_unique",
+        "page_media_view",              # New: total media views (replaces page_impressions)
+        "page_total_media_view_unique", # New: unique viewers (replaces page_impressions_unique)
+        "page_impressions",             # Legacy fallback
+        "page_impressions_unique",      # Legacy fallback
         "page_post_engagements",
         "page_video_views",
         "page_views_total",
@@ -321,7 +396,14 @@ async def fetch_page_level_insights(
             result[metric] = sum(values)
             result[f"{metric}_daily"] = values
         except Exception as error:
-            result["warnings"].append(f"Page metric '{metric}' failed: {error}")
+            # Don't warn about expected failures (new metrics on old API, old metrics on new API)
+            optional_metrics = {
+                "page_media_view", "page_total_media_view_unique",
+                "page_impressions", "page_impressions_unique",
+                "page_fans_online",
+            }
+            if metric not in optional_metrics:
+                result["warnings"].append(f"Page metric '{metric}' failed: {error}")
 
     # Lifetime metrics (total fans)
     lifetime_metrics = ["page_fans"]
@@ -450,7 +532,11 @@ async def _fetch_facebook_posts(
         comments = _summary_total(post.get("comments"))
         reactions = _summary_total(post.get("reactions"))
         shares = _share_count(post.get("shares"))
-        reach = insights.get("post_impressions_unique", 0)
+        # Reach: new metric first, then legacy fallback
+        reach = (
+            insights.get("post_total_media_view_unique", 0) or
+            insights.get("post_impressions_unique", 0)
+        )
         
         # Reactions: try insight metric first, then Graph edge summary
         reactions_from_insights = 0
@@ -462,7 +548,7 @@ async def _fetch_facebook_posts(
         if reactions_from_insights > 0:
             reactions = reactions_from_insights
         
-        # Views priority: post_media_view (new) > video_views > post_impressions > reach
+        # Views: new v25+ metric first, then legacy fallbacks
         views = (
             insights.get("post_media_view", 0) or
             insights.get("post_video_views", 0) or
@@ -471,7 +557,10 @@ async def _fetch_facebook_posts(
             reach
         )
         
-        engagement = comments + reactions + shares
+        # Clicks (part of interactions in Business Suite)
+        clicks = to_int(insights.get("post_clicks"))
+        
+        engagement = comments + reactions + shares + clicks
         
         # Extract comment texts
         comment_texts = []
@@ -584,11 +673,19 @@ async def _fetch_instagram_media(
         saves = to_int(insights.get("saved"))
         reach = to_float(insights.get("reach"))
         
-        # Meta Business Suite often uses plays/video_views for Reels
-        plays = insights.get("plays", 0) or insights.get("ig_reels_aggregated_all_plays_count", 0)
-        views = plays if plays > 0 else (insights.get("views", 0) or reach)
+        # Views: prefer views metric (aligns with Business Suite),
+        # then plays for Reels, then reach as last resort
+        api_views = to_float(insights.get("views"))
+        plays = to_float(insights.get("plays", 0) or insights.get("ig_reels_aggregated_all_plays_count", 0))
+        views = api_views if api_views > 0 else (plays if plays > 0 else reach)
         
-        engagement = to_float(insights.get("total_interactions") or (likes + comments + shares + saves))
+        # Navigation & profile activity (part of total interactions in Business Suite)
+        navigation = to_int(insights.get("navigation"))
+        profile_activity = to_int(insights.get("profile_activity"))
+        
+        # Engagement: total_interactions from API is best, otherwise manual sum
+        manual_engagement = likes + comments + shares + saves + navigation + profile_activity
+        engagement = to_float(insights.get("total_interactions") or manual_engagement)
         
         # Extract comment texts
         comment_texts = []

@@ -385,6 +385,11 @@ def save_dashboard_config(payload: dict[str, Any]) -> dict[str, Any]:
     )
     organic["facebook_enabled"] = bool(payload.get("facebook_enabled", True))
     organic["instagram_enabled"] = bool(payload.get("instagram_enabled", True))
+    organic["tiktok_enabled"] = bool(payload.get("tiktok_enabled", False))
+    
+    if payload.get("tiktok_access_token"):
+        organic["tiktok_access_token"] = payload["tiktok_access_token"]
+        
     organic["page_id"] = payload.get("page_id", "")
     organic["instagram_account_id"] = payload.get("instagram_account_id", "")
     
